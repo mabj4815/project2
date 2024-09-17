@@ -1,0 +1,200 @@
+---
+title: "Project2"
+author: "MATEO BANDALA-JACQUES"
+date: "2024-09-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+library(here)
+library(lubridate)
+```
+
+## **Part 1: Fun with functions**
+
+## *Part 1A: Exponential transformation*
+
+```{r 1A}
+
+
+Exp <- function(x,k) {
+  result <- 1
+  for (n in 1:k){
+    series <- ((x^n) / factorial(n))
+    result <- result + series
+  }
+  
+print(result)  
+}
+
+
+Exp(1,5)
+Exp(2,4)
+
+
+
+```
+
+## *Part 1B: Sample mean and sample standard deviation*
+
+```{r 1B}
+
+
+#Function for sample mean
+sample_mean <- function(numbers) {
+  mean_numbers <- sum(numbers)/length(numbers)
+  return(mean_numbers)
+}
+
+sample_mean(c(1,2,3,4,5,6,7))
+
+
+#Function for sample SD
+
+sample_sd <- function(numbers){
+  mean_numbers <- sample_mean(numbers)  # Use the function I created above
+  sum_squared_differences <- 0          #Start at 0
+  
+  for (i in numbers){                   #For each of the numbers
+    sum_squared_differences <- sum_squared_differences + (i - mean_numbers)^2 #The number, minus the mean, squared
+  }
+  
+  variance <- sum_squared_differences / (length(numbers)-1)        #Divided by N-1
+  sd_value <- sqrt(variance)   #And square rooted
+  
+return(sd_value)
+}
+  
+
+sample_sd(c(1,2,3,4,5)) #yay, it worked
+
+
+```
+
+## *Part 1C: Confidence Intervals*
+
+```{r 1C}
+
+calculate_CI <- function(numbers, conf) {
+  if(conf<0 | conf >1 | !is.numeric(conf)) {stop("Alpha must be a number from 0 to 1")}
+  if(!is.numeric(numbers)) {stop("Please input a vector of numbers")}
+  
+  
+  mean_numbers <- sample_mean(numbers) # First calculate the mean
+  samplesd_numbers <- sample_sd(numbers) #Then calculate the standard deviation
+  
+  alpha <- 1 - conf    #Alpha is 1- conf
+  degrees_freedom <- length(numbers) - 1    #Get the degree of freedom 
+  t_score <- qt (1 - alpha/2, degrees_freedom)     #derive the T-score
+  
+  standard_error <- samplesd_numbers/sqrt(length(numbers))   #Standard error
+  
+  margin_error <- t_score * standard_error #standard error times T-score 
+  
+  lower_bound <- mean_numbers - margin_error   
+  upper_bound <- mean_numbers + margin_error
+  
+  return(c("Lower"=lower_bound, "Upper"=upper_bound))
+  
+}
+
+
+
+x <- c(3,6,2,1,6,3,1,5,5)
+
+calculate_CI(x, 0.95)
+
+
+
+dat <- data.frame(x=x)
+fit <- lm(x ~ 1, dat)
+confint(fit) #yay, it matched
+
+
+
+```
+
+
+
+
+## Part 2: Data Wrangling 
+
+```{r 2.1}
+
+library(here)
+if (!file.exists(here("data", "tuesdata_rainfall.RDS"))) {
+    tuesdata <- tidytuesdayR::tt_load("2020-01-07")
+    rainfall <- tuesdata$rainfall
+    temperature <- tuesdata$temperature
+
+    # save the files to RDS objects
+    saveRDS(tuesdata$rainfall, file = here("data", "tuesdata_rainfall.RDS"))
+    saveRDS(tuesdata$temperature, file = here("data", "tuesdata_temperature.RDS"))
+}
+
+
+
+rainfall <- tuesdata$rainfall
+temperature <- tuesdata$temperature
+
+
+#Start with rainfall dataset and drop any rows with NAs.
+rainfall <- na.omit(rainfall)
+
+#Create a new column titled date that combines the columns year, month, day into one column separated by “-”. (e.g. #“2020-01-01”). This column should not be a character, but should be recognized as a date. (Hint: check out the #ymd() function in lubridate R package). You will also want to add a column that just keeps the year.
+
+
+rainfall$date <- make_date(rainfall$year, rainfall$month, rainfall$day)
+rainfall$date[1:5]
+rainfall <- rainfall %>% select(-month, -day)
+
+
+#Using the city_name column, convert the city names (character strings) to all upper case.
+rainfall$city_name <- toupper(rainfall$city_name)
+rainfall$city_name[1:10]
+
+#Join this wrangled rainfall dataset with the temperature dataset such that it includes only #observations that are in both data frames. (Hint: there are two keys that you will need to join #the two datasets together). (Hint: If all has gone well thus far, you should have a dataset with #83,964 rows and 13 columns).
+
+names(rainfall)
+names(temperature)
+
+joined <- inner_join(rainfall, temperature, by=c("city_name", "date"))
+
+
+```
+
+
+## Part 3: Data Visualization
+
+# 3A: Plotting temperature data overtime
+
+```{r 3A}
+
+
+joined%>%
+  filter(year>=2014) %>%
+  ggplot(aes(x=date, y=temperature, color=temp_type)) + 
+  geom_line() +
+  scale_color_manual(
+    values = c("max" = "#F59B25", "min" = "#42D6ED"),
+    labels = c("max" = "Maximum", "min" = "Minimum"),
+    name = "Temperature type") +
+  labs (x="Date", y="Temperature, celsius", title = "Temperature in Australian cities by year",
+        subtitle = "Canberra has the highest variation in temperatures, while Melbourne and Perth have the least",
+        caption = "Mateo Jacques") +
+  facet_wrap(~ city_name) +
+  theme_minimal() +
+  theme(legend.position = c(0.8,0.1))
+
+
+
+```
+
+
+
+
+
