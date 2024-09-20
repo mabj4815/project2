@@ -12,6 +12,8 @@ library(dplyr)
 library(ggplot2)
 library(here)
 library(lubridate)
+library(stringr)
+library(ggthemes)
 ```
 
 ## **Part 1: Fun with functions**
@@ -126,21 +128,10 @@ confint(fit) #yay, it matched
 ```{r 2.1}
 
 library(here)
-if (!file.exists(here("data", "tuesdata_rainfall.RDS"))) {
-    tuesdata <- tidytuesdayR::tt_load("2020-01-07")
-    rainfall <- tuesdata$rainfall
-    temperature <- tuesdata$temperature
-
-    # save the files to RDS objects
-    saveRDS(tuesdata$rainfall, file = here("data", "tuesdata_rainfall.RDS"))
-    saveRDS(tuesdata$temperature, file = here("data", "tuesdata_temperature.RDS"))
-}
 
 
-
-rainfall <- tuesdata$rainfall
-temperature <- tuesdata$temperature
-
+rainfall <- readRDS(file= here("data", "tuesdata_rainfall.RDS"))
+temperature <- readRDS(file= here("data", "tuesdata_temperature.RDS"))
 
 #Start with rainfall dataset and drop any rows with NAs.
 rainfall <- na.omit(rainfall)
@@ -193,6 +184,121 @@ joined%>%
 
 
 ```
+
+
+```{r 3B}
+
+
+`%nin%` <- Negate(`%in%`)
+
+
+plot_city <- function(city, year){
+
+if(city %nin% joined$city_name) {
+  print(unique(joined$city_name))
+  stop("Pick a city from the provided list")}
+  
+if(year %nin% joined$year){
+  stop("Pick a year between 1910 and 2019")
+}
+  
+  
+  plot <- joined %>%
+    filter(city_name == city, year == year) %>%
+    ggplot(aes(log(rainfall)))+
+    geom_histogram(binwidth = 0.2, fill="#42D6ED", color="black", alpha=0.7)
+    print(plot) +
+    labs(x="Log of rainfall, mm", y="Count", title = paste0("Histogram of rainfall for ", str_to_title(city)),
+         subtitle = "Note: X axis is in log scale", 
+         caption = paste0("Plot generated on ",today())) +
+      theme_stata()
+  
+  }
+
+#plot_city("BALTIMORE", 2017) #Testing my 'stop'
+plot_city("PERTH", 2017)
+
+
+#How I designed my function:
+
+#I create a function to negate %in% so that if the input city does not exist in the data, it stops and prints the name of options
+#Same for the year
+#Then I used ggplot to input a city name and the year, and created a hisrtogram.
+#I also added a title that includes the input city name, and added the date as a caption using lubridae
+
+
+```
+
+
+
+## Part 4: Apply functions and plot
+
+
+#4A: Tasks
+
+``` {r 4a}
+
+#First, filter for only years including 2014 and onwards.
+
+joined <- joined %>%
+  filter(year>=2014) %>%
+  group_by(city_name, date) %>%
+  slice_head() %>%
+  ungroup()
+
+#I sliced that data set because we artifically created two rows for each date when we obtained the max and min temperature.
+#And Now we have one row per city per day
+
+#For a given city and for a given year, calculate the sample mean (using your function sample_mean()), the sample standard deviation (using #your function sample_sd()), and a 95% confidence interval for the average rainfall (using your function calculate_CI()). Specifically, you #should add two columns in this summarized dataset: a column titled lower_bound and a column titled upper_bound containing the lower and upper #bounds for you CI that you calculated (using your function calculate_CI()).
+
+rain_df <- joined %>%
+  group_by(city_name, year) %>%
+  summarise(
+    rain_mean = sample_mean(rainfall),
+    rain_sd = sample_sd(rainfall),
+    lower_bound = calculate_CI(rainfall,0.95)[1],
+    upper_bound = calculate_CI(rainfall,0.95)[2]
+  )
+
+
+
+rain_df
+```
+
+
+
+```{r 4B}
+
+
+
+#Using the rain_df, plots the estimates of mean rainfall and the 95% confidence intervals on the same plot. There should be a separate faceted plot for each city. Think about using ggplot() with both geom_point() (and geom_line() to connect the points) for the means and geom_errorbar() for the lower and upper bounds of the confidence interval. Check https://r-graphics.org/recipe-annotate-error-bar and or the official documentation https://ggplot2.tidyverse.org/reference/geom_linerange.html for examples of how to use geom_errorbar().
+
+
+rain_df %>%
+  ggplot(aes(x = year, y = rain_mean)) +
+  geom_point(size = 3, color = "#2C3E50") +
+  geom_path(color = "#3498DB", size = 0.6) +
+  geom_errorbar(aes(ymin = lower_bound, ymax = upper_bound), width = 0.2, color = "#E74C3C", size = 0.8) +
+  facet_wrap(~ city_name, ncol = 2) +
+  labs(
+    x = "Year", 
+    y = "Rain Mean, (mm)", 
+    title = "Yearly Mean Rainfall by City", 
+    caption = today(),
+    subtitle  = "Sydney sure is dry"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust=0.5, colour = "darkgrey"),
+    strip.text = element_text(face = "bold", size = 8),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+
+```
+
+
 
 
 
